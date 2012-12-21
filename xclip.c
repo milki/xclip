@@ -30,7 +30,7 @@
 #include "xclib.h"
 
 /* command line option table for XrmParseCommand() */
-XrmOptionDescRec opt_tab[12];
+XrmOptionDescRec opt_tab[13];
 
 /* Options that get set on the command line */
 int sloop = 0;			/* number of loops */
@@ -50,6 +50,7 @@ char **fil_names;		/* names of files to read */
 int fil_number = 0;		/* number of files to read */
 int fil_current = 0;
 FILE *fil_handle = NULL;
+int clear_opt = 0;
 
 /* variables to hold Xrm database record and type */
 XrmValue rec_val;
@@ -117,6 +118,21 @@ doOptMain(int argc, char *argv[])
 	sloop = atoi(rec_val.addr);
 	if (fverb == OVERBOSE)	/* print in verbose mode only */
 	    fprintf(stderr, "Loops: %i\n", sloop);
+    }
+
+    /* check for -clear */
+    if (
+	    XrmGetResource(
+		opt_db,
+		"xclip.clear",
+		"Xclip.clear",
+		&rec_typ,
+		&rec_val
+		)
+       )
+    {
+	if (strcmp(rec_val.addr, "c") == 0)
+	    clear_opt = 1;
     }
 
     /* Read remaining options (filenames) */
@@ -210,6 +226,12 @@ doIn(Window win, const char *progname)
 
     /* Put chars into inc from stdin or files until we hit EOF */
     do {
+	if (clear_opt) {
+	    sel_buf[0] = 0;
+	    sel_len = 1;
+	    break;
+	}
+
 	if (fil_number == 0) {
 	    /* read from stdin if no files specified */
 	    fil_handle = stdin;
@@ -259,7 +281,7 @@ doIn(Window win, const char *progname)
     /* Handle cut buffer if needed */
     if (sseln == XA_STRING) {
 	XStoreBuffer(dpy, (char *) sel_buf, (int) sel_len, 0);
-	return;
+	goto done;
     }
 
     /* take control of the selection so that we receive
@@ -276,7 +298,9 @@ doIn(Window win, const char *progname)
 
 	pid = fork();
 	/* exit the parent process; */
-	if (pid)
+	if (pid && clear_opt)
+	    goto done;
+	else if (pid)
 	    exit(EXIT_SUCCESS);
     }
 
@@ -338,6 +362,10 @@ doIn(Window win, const char *progname)
 
 	dloop++;		/* increment loop counter */
     }
+
+done:
+    if (sel_buf)
+	free(sel_buf);
 }
 
 static void
@@ -471,6 +499,12 @@ main(int argc, char *argv[])
     opt_tab[11].argKind = XrmoptionNoArg;
     opt_tab[11].value = (XPointer) xcstrdup("N");
 
+    /* clear option entry */
+    opt_tab[12].option = xcstrdup("-clear");
+    opt_tab[12].specifier = xcstrdup(".clear");
+    opt_tab[12].argKind = XrmoptionNoArg;
+    opt_tab[12].value = (XPointer) xcstrdup("c");
+
     /* parse command line options */
     doOptMain(argc, argv);
 
@@ -497,8 +531,61 @@ main(int argc, char *argv[])
     /* get events about property changes */
     XSelectInput(dpy, win, PropertyChangeMask);
 
-    if (fdiri)
-	doIn(win, argv[0]);
+    if (fdiri) {
+	if (clear_opt) {
+	    sseln = XA_PRIMARY;
+	    doIn(win, argv[0]);
+
+	    dpy = XOpenDisplay(sdisp);
+	    win = XCreateSimpleWindow(
+		    dpy,
+		    DefaultRootWindow(dpy),
+		    0,
+		    0,
+		    1,
+		    1,
+		    0,
+		    0,
+		    0
+		    );
+	    XSelectInput(dpy, win, PropertyChangeMask);
+	    sseln = XA_SECONDARY;
+	    doIn(win, argv[0]);
+
+	    dpy = XOpenDisplay(sdisp);
+	    win = XCreateSimpleWindow(
+		    dpy,
+		    DefaultRootWindow(dpy),
+		    0,
+		    0,
+		    1,
+		    1,
+		    0,
+		    0,
+		    0
+		    );
+	    XSelectInput(dpy, win, PropertyChangeMask);
+	    sseln = XA_CLIPBOARD(dpy);
+	    doIn(win, argv[0]);
+
+	    dpy = XOpenDisplay(sdisp);
+	    win = XCreateSimpleWindow(
+		    dpy,
+		    DefaultRootWindow(dpy),
+		    0,
+		    0,
+		    1,
+		    1,
+		    0,
+		    0,
+		    0
+		    );
+	    XSelectInput(dpy, win, PropertyChangeMask);
+	    sseln = XA_STRING;
+	    doIn(win, argv[0]);
+	} else
+	    doIn(win, argv[0]);
+    }
     else
 	doOut(win);
 

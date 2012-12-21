@@ -49,6 +49,7 @@ prhelp(char *name)
 	    "      -version     version information\n"
 	    "      -silent      errors only, run in background (default)\n"
 	    "      -quiet       run in foreground, show what's happening\n"
+            "  -c, -clear       clear all selections\n"
 	    "      -verbose     running commentary\n"
 	    "\n" "Report bugs to <astrand@lysator.liu.se>\n", name);
     exit(EXIT_SUCCESS);
