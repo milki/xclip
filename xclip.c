@@ -21,6 +21,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <ctype.h>
 #ifdef HAVE_ICONV
@@ -35,11 +36,12 @@
 #include "xclib.h"
 
 /* command line option table for XrmParseCommand() */
-XrmOptionDescRec opt_tab[13];
+XrmOptionDescRec opt_tab[14];
 
 /* Options that get set on the command line */
 int sloop = 0;			/* number of loops */
 char *sdisp = NULL;		/* X display to connect to */
+char *srolling = NULL;
 Atom sseln = XA_PRIMARY;	/* X selection to work with */
 Atom target = XA_STRING;
 
@@ -125,6 +127,14 @@ doOptMain(int argc, char *argv[])
 	    fprintf(stderr, "Loops: %i\n", sloop);
     }
 
+    /* check for -rolling */
+    if (XrmGetResource(opt_db, "xclip.rolling", "Xclip.Rolling", &rec_typ, &rec_val)
+	) {
+	srolling = rec_val.addr;
+	if (fverb == OVERBOSE)	/* print in verbose mode only */
+	    fprintf(stderr, "Rolling: %s\n", srolling);
+    }
+
     /* Read remaining options (filenames) */
     while ((fil_number + 1) < argc) {
 	if (fil_number > 0) {
@@ -205,6 +215,7 @@ static int
 doIn(Window win, const char *progname)
 {
     unsigned char *sel_buf;	/* buffer for selection data */
+    char * tokens = NULL; /* tokenized buffer */
     unsigned long sel_len = 0;	/* length of sel_buf */
     unsigned long sel_all = 0;	/* allocated size of sel_buf */
     XEvent evt;			/* X Event Structures */
@@ -266,6 +277,10 @@ doIn(Window win, const char *progname)
     if (sseln == XA_STRING) {
 	XStoreBuffer(dpy, (char *) sel_buf, (int) sel_len, 0);
 	return EXIT_SUCCESS;
+    }
+
+    if (srolling) {
+        tokens = strtok((char *) sel_buf, srolling);
     }
 
     /* take control of the selection so that we receive
@@ -330,7 +345,12 @@ doIn(Window win, const char *progname)
 
 	    XNextEvent(dpy, &evt);
 
+        if (srolling) {
+            tokens = strtok(NULL, srolling);
+	        finished = xcin(dpy, &cwin, evt, &pty, target, (unsigned char*) tokens, strlen(tokens), &sel_pos, &context);
+        } else {
 	    finished = xcin(dpy, &cwin, evt, &pty, target, sel_buf, sel_len, &sel_pos, &context);
+        }
 
 	    if (evt.type == SelectionClear)
 		clear = 1;
@@ -568,6 +588,12 @@ main(int argc, char *argv[])
     opt_tab[12].specifier = xcstrdup(".target");
     opt_tab[12].argKind = XrmoptionSepArg;
     opt_tab[12].value = (XPointer) NULL;
+
+    /* rolling option entry */
+    opt_tab[13].option = xcstrdup("-rolling");
+    opt_tab[13].specifier = xcstrdup(".rolling");
+    opt_tab[13].argKind = XrmoptionSepArg;
+    opt_tab[13].value = (XPointer) NULL;
 
     /* parse command line options */
     doOptMain(argc, argv);
