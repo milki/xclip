@@ -35,6 +35,9 @@ Here are some ideas for things you can do with xclip:
 	text to the primary X selection:
 	!xclip -f
 
+	Copy the current date/time without trailing newline character:
+	date | xclip -r
+
 
 USING XCLIP FOR MOVING FILES
 ============================
