@@ -35,7 +35,7 @@
 #include "xclib.h"
 
 /* command line option table for XrmParseCommand() */
-XrmOptionDescRec opt_tab[13];
+XrmOptionDescRec opt_tab[15];
 
 /* Options that get set on the command line */
 int sloop = 0;			/* number of loops */
@@ -47,6 +47,7 @@ Atom target = XA_STRING;
 static int fverb = OSILENT;	/* output level */
 static int fdiri = T;		/* direction is in */
 static int ffilt = F;		/* filter mode */
+static int frmnl = F;		/* remove (single) newline character at the very end if present */
 
 Display *dpy;			/* connection to X11 display */
 XrmDatabase opt_db = NULL;	/* database for options */
@@ -98,6 +99,14 @@ doOptMain(int argc, char *argv[])
 	/* filter mode only allowed in silent mode */
 	if (fverb == OSILENT)
 	    ffilt = T;
+    }
+
+    /* set "remove last newline character if present" mode */
+    if (XrmGetResource(opt_db, "xclip.rmlastnl", "Xclip.RmLastNl", &rec_typ, &rec_val)
+	) {
+        frmnl = T;
+	if (fverb == OVERBOSE)	/* print in verbose mode only */
+	    fprintf(stderr, "Remove last newline character if present: yes\n");
     }
 
     /* check for -help and -version */
@@ -252,6 +261,11 @@ doIn(Window win, const char *progname)
 	    sel_len += fread(sel_buf + sel_len, sizeof(char), sel_all - sel_len, fil_handle);
 	}
     } while (fil_current < fil_number);
+
+    /* if we are in "remove newline if it is the last character" mode
+     * and the last character actually _is_ newline, remove it by
+     * decreasing the selection length by 1. */
+    if (frmnl && sel_len && sel_buf[sel_len-1] == '\n') sel_len--;
 
     /* if there are no files being read from (i.e., input
      * is from stdin not files, and we are in filter mode,
@@ -462,6 +476,11 @@ doOut(Window win)
 	}
     }
 
+    /* if we are in "remove newline if it is the last character" mode
+     * and the last character actually _is_ newline, remove it by
+     * decreasing the selection length by 1. */
+    if (frmnl && sel_len && sel_buf[sel_len-1] == '\n') sel_len--;
+
     if (sel_len) {
 	/* only print the buffer out, and free it, if it's not
 	 * empty
@@ -487,7 +506,7 @@ main(int argc, char *argv[])
      * do it while sticking to pure ANSI C. The option and specifier
      * members have a type of volatile char *, so they need to be allocated
      * by strdup or malloc, you can't set them to a string constant at
-     * declare time, this is note pure ANSI C apparently, although it does
+     * declare time, this is not pure ANSI C apparently, although it does
      * work with gcc
      */
 
@@ -509,65 +528,77 @@ main(int argc, char *argv[])
     opt_tab[2].argKind = XrmoptionSepArg;
     opt_tab[2].value = (XPointer) NULL;
 
+    /* selection option entry */
+    opt_tab[3].option = xcstrdup("-s");
+    opt_tab[3].specifier = xcstrdup(".selection");
+    opt_tab[3].argKind = XrmoptionSepArg;
+    opt_tab[3].value = (XPointer) NULL;
+
     /* filter option entry */
-    opt_tab[3].option = xcstrdup("-filter");
-    opt_tab[3].specifier = xcstrdup(".filter");
-    opt_tab[3].argKind = XrmoptionNoArg;
-    opt_tab[3].value = (XPointer) xcstrdup(ST);
+    opt_tab[4].option = xcstrdup("-filter");
+    opt_tab[4].specifier = xcstrdup(".filter");
+    opt_tab[4].argKind = XrmoptionNoArg;
+    opt_tab[4].value = (XPointer) xcstrdup(ST);
 
     /* in option entry */
-    opt_tab[4].option = xcstrdup("-in");
-    opt_tab[4].specifier = xcstrdup(".direction");
-    opt_tab[4].argKind = XrmoptionNoArg;
-    opt_tab[4].value = (XPointer) xcstrdup("I");
-
-    /* out option entry */
-    opt_tab[5].option = xcstrdup("-out");
+    opt_tab[5].option = xcstrdup("-in");
     opt_tab[5].specifier = xcstrdup(".direction");
     opt_tab[5].argKind = XrmoptionNoArg;
-    opt_tab[5].value = (XPointer) xcstrdup("O");
+    opt_tab[5].value = (XPointer) xcstrdup("I");
+
+    /* out option entry */
+    opt_tab[6].option = xcstrdup("-out");
+    opt_tab[6].specifier = xcstrdup(".direction");
+    opt_tab[6].argKind = XrmoptionNoArg;
+    opt_tab[6].value = (XPointer) xcstrdup("O");
 
     /* version option entry */
-    opt_tab[6].option = xcstrdup("-version");
-    opt_tab[6].specifier = xcstrdup(".print");
-    opt_tab[6].argKind = XrmoptionNoArg;
-    opt_tab[6].value = (XPointer) xcstrdup("V");
-
-    /* help option entry */
-    opt_tab[7].option = xcstrdup("-help");
+    opt_tab[7].option = xcstrdup("-version");
     opt_tab[7].specifier = xcstrdup(".print");
     opt_tab[7].argKind = XrmoptionNoArg;
-    opt_tab[7].value = (XPointer) xcstrdup("H");
+    opt_tab[7].value = (XPointer) xcstrdup("V");
+
+    /* help option entry */
+    opt_tab[8].option = xcstrdup("-help");
+    opt_tab[8].specifier = xcstrdup(".print");
+    opt_tab[8].argKind = XrmoptionNoArg;
+    opt_tab[8].value = (XPointer) xcstrdup("H");
 
     /* silent option entry */
-    opt_tab[8].option = xcstrdup("-silent");
-    opt_tab[8].specifier = xcstrdup(".olevel");
-    opt_tab[8].argKind = XrmoptionNoArg;
-    opt_tab[8].value = (XPointer) xcstrdup("S");
-
-    /* quiet option entry */
-    opt_tab[9].option = xcstrdup("-quiet");
+    opt_tab[9].option = xcstrdup("-silent");
     opt_tab[9].specifier = xcstrdup(".olevel");
     opt_tab[9].argKind = XrmoptionNoArg;
-    opt_tab[9].value = (XPointer) xcstrdup("Q");
+    opt_tab[9].value = (XPointer) xcstrdup("S");
 
-    /* verbose option entry */
-    opt_tab[10].option = xcstrdup("-verbose");
+    /* quiet option entry */
+    opt_tab[10].option = xcstrdup("-quiet");
     opt_tab[10].specifier = xcstrdup(".olevel");
     opt_tab[10].argKind = XrmoptionNoArg;
-    opt_tab[10].value = (XPointer) xcstrdup("V");
+    opt_tab[10].value = (XPointer) xcstrdup("Q");
+
+    /* verbose option entry */
+    opt_tab[11].option = xcstrdup("-verbose");
+    opt_tab[11].specifier = xcstrdup(".olevel");
+    opt_tab[11].argKind = XrmoptionNoArg;
+    opt_tab[11].value = (XPointer) xcstrdup("V");
 
     /* utf8 option entry */
-    opt_tab[11].option = xcstrdup("-noutf8");
-    opt_tab[11].specifier = xcstrdup(".noutf8");
-    opt_tab[11].argKind = XrmoptionNoArg;
-    opt_tab[11].value = (XPointer) xcstrdup("N");
+    opt_tab[12].option = xcstrdup("-noutf8");
+    opt_tab[12].specifier = xcstrdup(".noutf8");
+    opt_tab[12].argKind = XrmoptionNoArg;
+    opt_tab[12].value = (XPointer) xcstrdup("N");
 
     /* target option entry */
-    opt_tab[12].option = xcstrdup("-target");
-    opt_tab[12].specifier = xcstrdup(".target");
-    opt_tab[12].argKind = XrmoptionSepArg;
-    opt_tab[12].value = (XPointer) NULL;
+    opt_tab[13].option = xcstrdup("-target");
+    opt_tab[13].specifier = xcstrdup(".target");
+    opt_tab[13].argKind = XrmoptionSepArg;
+    opt_tab[13].value = (XPointer) NULL;
+
+    /* "remove newline if it is the last character" entry */
+    opt_tab[14].option = xcstrdup("-rmlastnl");
+    opt_tab[14].specifier = xcstrdup(".rmlastnl");
+    opt_tab[14].argKind = XrmoptionNoArg;
+    opt_tab[14].value = (XPointer) xcstrdup(ST);
 
     /* parse command line options */
     doOptMain(argc, argv);
