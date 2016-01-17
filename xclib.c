@@ -250,7 +250,7 @@ xcout(Display * dpy,
 
 	XFree(buffer);
 
-	/* if we have come this far, the propery contains
+	/* if we have come this far, the property contains
 	 * text, we know the size.
 	 */
 	XGetWindowProperty(dpy,
